@@ -1,9 +1,19 @@
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    color: #e6e9f5;
+    background: radial-gradient(1200px 600px at 15% -10%, #1e2a78 0%, transparent 55%),
+                radial-gradient(1000px 600px at 100% 0%, #0e7490 0%, transparent 50%),
+                linear-gradient(160deg, #0b1024 0%, #0d1338 60%, #0a0f2b 100%);
+    background-attachment: fixed;
 }
 
 a, .btn-link {
-    color: #006bb7;
+    color: #7cc4ff;
 }
 
 .btn-primary {

@@ -1,10 +1,23 @@
+using System.Reflection;
+using freecourse.Common.Mediator;
 using freecourse.Components;
+using freecourse.Features.Weather;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Custom mediator + feature handlers (vertical slices).
+builder.Services.AddMediator(Assembly.GetExecutingAssembly());
+
+// HTTP client used by the weather slice to call the Open-Meteo API.
+builder.Services.AddHttpClient(GetWeatherQueryHandler.HttpClientName, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("freecourse-weather/1.0");
+});
 
 var app = builder.Build();
 

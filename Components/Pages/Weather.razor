@@ -1,64 +1,243 @@
-﻿@page "/weather"
-@attribute [StreamRendering]
+@page "/weather"
+@rendermode InteractiveServer
+@using System.Globalization
+@using freecourse.Common.Mediator
+@using freecourse.Features.Weather
+@inject IMediator Mediator
 
 <PageTitle>Weather</PageTitle>
 
-<h1>Weather</h1>
+<section class="weather @ThemeClass">
+    <header class="weather__intro">
+        <h1>Weather</h1>
+        <p>Live conditions, a 7-day forecast and the city on the map, powered by Open-Meteo.</p>
+    </header>
 
-<p>This component demonstrates showing data.</p>
-
-@if (forecasts == null)
-{
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th aria-label="Temperature in Celsius">Temp. (C)</th>
-                <th aria-label="Temperature in Fahrenheit">Temp. (F)</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var forecast in forecasts)
+    <EditForm Model="this" OnValidSubmit="SearchAsync" class="search">
+        <div class="search__field">
+            <span class="search__icon" aria-hidden="true">🔍</span>
+            <InputText @bind-Value="cityInput"
+                       class="search__input"
+                       placeholder="Enter a city, e.g. Tokyo"
+                       aria-label="City name" />
+        </div>
+        <button type="submit" class="search__button" disabled="@isLoading">
+            @if (isLoading)
             {
-                <tr>
-                    <td>@forecast.Date.ToShortDateString()</td>
-                    <td>@forecast.TemperatureC</td>
-                    <td>@forecast.TemperatureF</td>
-                    <td>@forecast.Summary</td>
-                </tr>
+                <span class="spinner" aria-hidden="true"></span>
+                <span>Searching…</span>
             }
-        </tbody>
-    </table>
-}
+            else
+            {
+                <span>Get weather</span>
+            }
+        </button>
+    </EditForm>
 
-@code {
-    private WeatherForecast[]? forecasts;
-
-    protected override async Task OnInitializedAsync()
+    @if (errorMessage is not null)
     {
-        // Simulate asynchronous loading to demonstrate streaming rendering
-        await Task.Delay(500);
-
-        var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-        forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
-        {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).ToArray();
+        <div class="alert" role="alert">
+            <span aria-hidden="true">⚠️</span> @errorMessage
+        </div>
     }
 
-    private class WeatherForecast
+    @if (result is not null)
     {
-        public DateOnly Date { get; set; }
-        public int TemperatureC { get; set; }
-        public string? Summary { get; set; }
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+        <article class="current">
+            <div class="current__main">
+                <div class="current__icon" aria-hidden="true">@result.Icon</div>
+                <div class="current__readout">
+                    <h2 class="current__place">
+                        @result.City@(string.IsNullOrEmpty(result.Country) ? "" : $", {result.Country}")
+                    </h2>
+                    @if (!string.IsNullOrEmpty(result.Region) && result.Region != result.City)
+                    {
+                        <p class="current__region">@result.Region</p>
+                    }
+                    <p class="current__temp">@Format(result.TemperatureC)°<span>C</span></p>
+                    <p class="current__desc">@result.Description</p>
+
+                    <ul class="temp-units" aria-label="Temperature in other units">
+                        <li><span class="temp-units__label">Celsius</span><span class="temp-units__value">@Format(result.TemperatureC) °C</span></li>
+                        <li><span class="temp-units__label">Fahrenheit</span><span class="temp-units__value">@Format(ToFahrenheit(result.TemperatureC)) °F</span></li>
+                        <li><span class="temp-units__label">Kelvin</span><span class="temp-units__value">@Format(ToKelvin(result.TemperatureC)) K</span></li>
+                    </ul>
+                </div>
+            </div>
+
+            <ul class="metrics">
+                <li>
+                    <span class="metrics__label">Feels like</span>
+                    <span class="metrics__value">@Format(result.FeelsLikeC) °C</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Humidity</span>
+                    <span class="metrics__value">@result.Humidity%</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Dew point</span>
+                    <span class="metrics__value">@Format(result.DewPointC) °C</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Wind</span>
+                    <span class="metrics__value">@Format(result.WindSpeedKmh) km/h @Compass(result.WindDirectionDegrees)</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Gusts</span>
+                    <span class="metrics__value">@Format(result.WindGustsKmh) km/h</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Pressure</span>
+                    <span class="metrics__value">@Format(result.PressureHpa) hPa</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Cloud cover</span>
+                    <span class="metrics__value">@result.CloudCoverPercent%</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Precipitation</span>
+                    <span class="metrics__value">@Format(result.PrecipitationMm) mm</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Sunrise</span>
+                    <span class="metrics__value">@FormatTime(result.Sunrise)</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Sunset</span>
+                    <span class="metrics__value">@FormatTime(result.Sunset)</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Time of day</span>
+                    <span class="metrics__value">@(result.IsDay ? "Day ☀️" : "Night 🌙")</span>
+                </li>
+                <li>
+                    <span class="metrics__label">Coordinates</span>
+                    <span class="metrics__value">@Coord(result.Latitude, "N", "S"), @Coord(result.Longitude, "E", "W")</span>
+                </li>
+            </ul>
+
+            <h3 class="forecast__title">Location</h3>
+            <div class="map">
+                <iframe class="map__frame"
+                        title="@($"Map of {result.City}")"
+                        loading="lazy"
+                        src="@MapEmbedUrl(result.Latitude, result.Longitude)"></iframe>
+                <a class="map__link" target="_blank" rel="noopener"
+                   href="@MapExternalUrl(result.Latitude, result.Longitude)">
+                    View larger map ↗
+                </a>
+            </div>
+
+            @if (result.Daily.Count > 0)
+            {
+                <h3 class="forecast__title">7-day forecast</h3>
+                <div class="forecast">
+                    @foreach (var day in result.Daily)
+                    {
+                        <div class="forecast__card">
+                            <span class="forecast__day">@day.Date.ToString("ddd")</span>
+                            <span class="forecast__date">@day.Date.ToString("MMM d")</span>
+                            <span class="forecast__icon" aria-hidden="true" title="@day.Description">@day.Icon</span>
+                            <span class="forecast__temps">
+                                <strong>@Format(day.MaxTemperatureC)°</strong>
+                                <span>@Format(day.MinTemperatureC)°</span>
+                            </span>
+                            <span class="forecast__extra" title="Chance of precipitation">
+                                💧 @day.PrecipitationProbabilityPercent%
+                            </span>
+                            <span class="forecast__extra" title="UV index">
+                                ☀ UV @Format(day.UvIndexMax)
+                            </span>
+                        </div>
+                    }
+                </div>
+            }
+        </article>
+    }
+    else if (!isLoading && errorMessage is null)
+    {
+        <div class="empty">
+            <div class="empty__icon" aria-hidden="true">🌍</div>
+            <p>Search for a city to see its current weather.</p>
+        </div>
+    }
+</section>
+
+@code {
+    private string cityInput = string.Empty;
+    private WeatherResult? result;
+    private string? errorMessage;
+    private bool isLoading;
+
+    private string ThemeClass => result is null ? "weather--default" : $"weather--{result.Theme}";
+
+    private static string Format(double value) => value.ToString("0.#", CultureInfo.InvariantCulture);
+
+    private static double ToFahrenheit(double celsius) => celsius * 9.0 / 5.0 + 32.0;
+    private static double ToKelvin(double celsius) => celsius + 273.15;
+
+    private static string FormatTime(DateTimeOffset? time) =>
+        time is { } t ? t.ToString("HH:mm") : "—";
+
+    private static string Coord(double value, string positive, string negative) =>
+        $"{Math.Abs(value).ToString("0.00", CultureInfo.InvariantCulture)}° {(value >= 0 ? positive : negative)}";
+
+    private static string Compass(int degrees)
+    {
+        string[] dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+                          "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+        var i = (int)Math.Round((degrees % 360) / 22.5) % 16;
+        return dirs[i];
+    }
+
+    private static string MapEmbedUrl(double lat, double lon)
+    {
+        // ~0.05° box around the marker — roughly a city-scale view.
+        const double pad = 0.05;
+        var minLon = (lon - pad).ToString("0.####", CultureInfo.InvariantCulture);
+        var minLat = (lat - pad).ToString("0.####", CultureInfo.InvariantCulture);
+        var maxLon = (lon + pad).ToString("0.####", CultureInfo.InvariantCulture);
+        var maxLat = (lat + pad).ToString("0.####", CultureInfo.InvariantCulture);
+        var marker = $"{lat.ToString("0.####", CultureInfo.InvariantCulture)},{lon.ToString("0.####", CultureInfo.InvariantCulture)}";
+        return $"https://www.openstreetmap.org/export/embed.html?bbox={minLon},{minLat},{maxLon},{maxLat}&layer=mapnik&marker={marker}";
+    }
+
+    private static string MapExternalUrl(double lat, double lon)
+    {
+        var la = lat.ToString("0.####", CultureInfo.InvariantCulture);
+        var lo = lon.ToString("0.####", CultureInfo.InvariantCulture);
+        return $"https://www.openstreetmap.org/?mlat={la}&mlon={lo}#map=11/{la}/{lo}";
+    }
+
+    private async Task SearchAsync()
+    {
+        var city = cityInput?.Trim();
+        if (string.IsNullOrWhiteSpace(city))
+        {
+            errorMessage = "Please enter a city name.";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            result = await Mediator.Send(new GetWeatherQuery(city));
+        }
+        catch (CityNotFoundException ex)
+        {
+            result = null;
+            errorMessage = $"We couldn't find \"{ex.City}\". Check the spelling and try again.";
+        }
+        catch (Exception)
+        {
+            result = null;
+            errorMessage = "Something went wrong reaching the weather service. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 }
